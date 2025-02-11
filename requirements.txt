@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+httpx
+unstructured[all-docs]
+python-multipart
+pydantic
+pdf2image
