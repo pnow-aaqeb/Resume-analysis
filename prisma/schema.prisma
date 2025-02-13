@@ -1,8 +1,9 @@
 generator client {
   provider             = "prisma-client-py"
+  recursive_type_depth = "5"
   interface            = "asyncio"
-  recursive_type_depth = 5
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -130,7 +131,21 @@ model position_to_keywords {
 }
 
 model agreements {
-  id String @id @db.Uuid
+  id                String    @id @db.Uuid
+  location          String?
+  date_signed       DateTime?
+  payment_terms     Float?
+  airtable_metadata Json?
+  contact_id        String?   @db.Uuid
+  company_id        String    @unique @db.Uuid
+  created_by        String?
+  created_at        DateTime  @default(now())
+  last_updated_by   String?
+  last_updated_at   DateTime
+  is_deleted        Boolean   @default(false)
+  deleted_at        DateTime?
+  deleted_by        String?
+  companies         companies @relation(fields: [company_id], references: [id])
 }
 
 model api_keys {
@@ -228,7 +243,7 @@ model candidate_source_options {
   id                 String       @id @db.Uuid
   field_display_name String       @default("candidate_source")
   color              String?      @db.VarChar(32)
-  color_hex          String       @db.Char(6)
+  color_hex          String?      @db.Char(6)
   value              String       @unique
   created_by         String       @default("system")
   created_at         DateTime     @default(now())
@@ -244,7 +259,7 @@ model candidate_status_single_select {
   field_type         FrontendFieldTypes @default(SINGLE_SELECT)
   field_display_name String             @default("candidate_status")
   color              String?            @db.VarChar(32)
-  color_hex          String             @db.Char(6)
+  color_hex          String?            @db.Char(6)
   key                String             @unique
   value              String             @unique
   created_by         String             @default("system")
@@ -261,7 +276,7 @@ model candidate_submission_status {
   field_type            FrontendFieldTypes      @default(SINGLE_SELECT)
   field_display_name    String                  @default("company_status")
   color                 String?                 @db.VarChar(32)
-  color_hex             String                  @db.Char(6)
+  color_hex             String?                 @db.Char(6)
   value                 String                  @unique
   created_by            String                  @default("system")
   created_at            DateTime                @default(now())
@@ -281,6 +296,8 @@ model candidate_submissions {
   last_updated_at             DateTime
   deleted_at                  DateTime?
   deleted_by                  String?
+  created_at                  DateTime                    @default(now())
+  created_by                  String?
   candidate_full_name         String
   candidate_id                String                      @db.Uuid
   company_id                  String                      @db.Uuid
@@ -288,6 +305,7 @@ model candidate_submissions {
   is_position_deleted         Boolean
   is_company_deleted          Boolean
   company_name                String
+  airtable_metadata           Json?
   candidates                  candidates                  @relation(fields: [candidate_id, candidate_full_name], references: [id, candidate_full_name])
   positions                   positions                   @relation(fields: [position_id, company_id, is_position_deleted, is_company_deleted, company_name], references: [id, company_id, is_deleted, is_company_deleted, company_name])
   candidate_submission_status candidate_submission_status @relation(fields: [status], references: [value])
@@ -299,32 +317,32 @@ model candidate_submissions {
 }
 
 model candidates {
-  id                             String                         @id @db.Uuid
+  id                             String                          @id @db.Uuid
   is_remote                      Boolean?
-  total_work_experience          String
-  search_location                String
-  resume_text                    String
+  total_work_experience          String?
+  search_location                String?
+  resume_text                    String?
   url                            String?
-  status                         String
-  personal_information_id        String                         @db.Uuid
+  status                         String?
+  personal_information_id        String                          @db.Uuid
   sourced_from                   String
-  location_id                    String                         @db.Uuid
+  location_id                    String?                         @db.Uuid
   candidate_full_name            String
   created_by                     String?
-  created_at                     DateTime                       @default(now())
+  created_at                     DateTime                        @default(now())
   last_updated_by                String?
   last_updated_at                DateTime
-  is_deleted                     Boolean                        @default(false)
+  is_deleted                     Boolean                         @default(false)
   deleted_at                     DateTime?
   deleted_by                     String?
   bdm_id                         String?
   assignee_id                    String?
   candidate_to_keywords          candidate_to_keywords[]
   candidate_submissions          candidate_submissions[]
-  locations                      locations                      @relation(fields: [location_id], references: [id])
-  personal_information           personal_information           @relation(fields: [personal_information_id, candidate_full_name], references: [id, full_name])
-  candidate_source_options       candidate_source_options       @relation(fields: [sourced_from], references: [value])
-  candidate_status_single_select candidate_status_single_select @relation(fields: [status], references: [value])
+  locations                      locations?                      @relation(fields: [location_id], references: [id])
+  personal_information           personal_information            @relation(fields: [personal_information_id, candidate_full_name], references: [id, full_name])
+  candidate_source_options       candidate_source_options        @relation(fields: [sourced_from], references: [value])
+  candidate_status_single_select candidate_status_single_select? @relation(fields: [status], references: [value])
   certifications                 certifications[]
   education                      education[]
   licenses                       licenses[]
@@ -406,8 +424,10 @@ model companies {
   careers_page                 String?
   linkedin_url                 String?
   raw_body                     Json?
+  airtable_metadata            Json?
   research_analyst             String?                      @db.Uuid
   recruiter_assignee_id        String?                      @db.Uuid
+  agreements                   agreements?
   company_status_single_select company_status_single_select @relation(fields: [status], references: [value])
   contacts                     contacts[]
   leads                        leads[]
@@ -422,7 +442,7 @@ model company_status_single_select {
   field_type         FrontendFieldTypes @default(SINGLE_SELECT)
   field_display_name String             @default("company_status")
   color              String?            @db.VarChar(32)
-  color_hex          String             @db.Char(6)
+  color_hex          String?            @db.Char(6)
   key                String             @unique
   value              String             @unique
   created_by         String             @default("system")
@@ -437,7 +457,7 @@ model company_status_single_select {
 model contacts {
   id                         String                      @id @db.Uuid
   name                       String
-  email                      String?
+  email                      String?                     @unique
   phone                      String?
   job_title                  String
   linkedin                   String?
@@ -463,7 +483,8 @@ model contacts {
   subdepartments             String[]
   seniority                  String?
   functions                  String[]
-  raw_body                   String
+  raw_body                   String?
+  airtable_metadata          Json?
   companies                  companies                   @relation(fields: [company_id], references: [id])
   email_status_single_select email_status_single_select? @relation(fields: [email_status], references: [value])
   pocs                       pocs[]
@@ -617,6 +638,7 @@ model domains {
   name                  String                 @unique
   description           String?
   status                DomainStatus           @default(PENDING)
+  mail_type             MailType
   tenant_id             String?                @db.Uuid
   tenant_config_id      String?                @db.Uuid
   created_at            DateTime               @default(now())
@@ -676,14 +698,14 @@ model email_action_history {
 model email_preference {
   id                    String                @id @db.Uuid
   tenant_id             String                @unique @db.Uuid
-  msg                   Boolean
-  sdg                   Boolean
+  microsoft_graph       Boolean               @default(false)
+  send_grid             Boolean               @default(false)
   created_at            DateTime              @default(now())
   last_updated_at       DateTime?
   tenant_configurations tenant_configurations @relation(fields: [tenant_id], references: [tenant_id])
 
-  @@index([tenant_id, msg])
-  @@index([tenant_id, sdg])
+  @@index([tenant_id, microsoft_graph])
+  @@index([tenant_id, send_grid])
 }
 
 model email_servers {
@@ -715,7 +737,7 @@ model email_status_single_select {
   id                 String     @id @db.Uuid
   field_display_name String     @default("email_status")
   color              String?    @db.VarChar(32)
-  color_hex          String     @db.Char(6)
+  color_hex          String?    @db.Char(6)
   key                String     @unique
   value              String     @unique
   created_by         String     @default("system")
@@ -764,7 +786,7 @@ model folders {
   name        String
   description String?
   color       String?    @db.VarChar(32)
-  color_hex   String     @db.Char(6)
+  color_hex   String?    @db.Char(6)
   icon        String?
   key         String     @unique
   meta_data   Json?
@@ -922,19 +944,20 @@ model interview_modes {
 
 model interviews {
   id                     String                @id @db.Uuid
-  host_user_id           String                @db.Uuid
-  host_user_email        String
+  host_user_id           String?               @db.Uuid
+  host_user_email        String?
   start_time             DateTime
-  end_time               DateTime
-  attendees_id           String                @unique @db.Uuid
-  outlook_calendar_event Json
-  interview_subject      String
+  end_time               DateTime?
+  attendees_id           String?               @unique @db.Uuid
+  outlook_calendar_event Json?
+  interview_subject      String?
   feedback               String?
   candidate_id           String                @db.Uuid
   submission_id          String                @db.Uuid
   position_id            String                @db.Uuid
   timezone_key           String
   interview_mode         String
+  airtable_metadata      Json?
   created_by             String?               @default("system")
   created_at             DateTime              @default(now())
   last_updated_by        String?
@@ -942,7 +965,7 @@ model interviews {
   is_deleted             Boolean               @default(false)
   deleted_at             DateTime?
   deleted_by             String?
-  interview_attendees    interview_attendees   @relation(fields: [attendees_id], references: [id])
+  interview_attendees    interview_attendees?  @relation(fields: [attendees_id], references: [id])
   interview_feedbacks    interview_feedbacks?  @relation(fields: [feedback], references: [value])
   interview_modes        interview_modes       @relation(fields: [interview_mode], references: [value])
   candidate_submissions  candidate_submissions @relation(fields: [submission_id, candidate_id, position_id], references: [id, candidate_id, position_id])
@@ -1036,7 +1059,7 @@ model leads_status_single_select {
   field_type         FrontendFieldTypes @default(SINGLE_SELECT)
   field_display_name String             @default("leads_status")
   color              String?            @db.VarChar(32)
-  color_hex          String             @db.Char(6)
+  color_hex          String?            @db.Char(6)
   key                String             @unique
   value              String             @unique
   created_by         String             @default("system")
@@ -1101,11 +1124,15 @@ model messages {
   summary                Json?
   meta_data              Json
   source_id              String                   @db.Uuid
+  isRead                 Boolean                  @default(false)
+  isStarred              Boolean                  @default(false)
+  isArchived             Boolean                  @default(false)
   created_at             DateTime                 @default(now())
   last_updated_at        DateTime
-  isArchived             Boolean
-  isRead                 Boolean
-  isStarred              Boolean
+  subject_embedding      Json?
+  body_embedding         Json?
+  sender_embedding       Json?
+  receiver_embedding     Json?
   FolderMessageToMessage FolderMessageToMessage[]
   sources                sources                  @relation(fields: [source_id], references: [id])
 
@@ -1124,6 +1151,8 @@ model notes {
   created_at      DateTime  @default(now())
   last_updated_by String?
   last_updated_at DateTime?
+  deleted_at      DateTime?
+  is_deleted      Boolean   @default(false)
 
   @@index([table_id, field_id])
 }
@@ -1135,18 +1164,18 @@ model oppurtunities {
 model personal_information {
   id                   String      @id @db.Uuid
   full_name            String
-  email                String
+  email                String?
   linkedin             String?
   github               String?
   user_id              String?
-  phone                String
-  address_string       String
-  country_of_residence String
-  city_of_residence    String
-  zip                  String
-  state_of_residence   String
-  age                  String
-  is_us_citizen        Boolean
+  phone                String?
+  address_string       String?
+  country_of_residence String?
+  city_of_residence    String?
+  zip                  String?
+  state_of_residence   String?
+  age                  String?
+  is_us_citizen        Boolean?
   created_by           String?
   created_at           DateTime    @default(now())
   last_updated_by      String?
@@ -1197,21 +1226,22 @@ model policies {
 model positions {
   id                    String                  @id @db.Uuid
   title                 String
-  description           String
+  description           String?
   is_active             Boolean                 @default(true)
   company_id            String                  @db.Uuid
   company_name          String
   is_company_deleted    Boolean
   company_status        String
-  location_city         String
-  location_state        String
-  location_country      String
-  location_zip          String
-  jd_attachment_id      String                  @db.Uuid
-  jd_filename           String
-  jd_file_type          String
-  jd_thumbnail          Bytes
-  jd_classification     DocumentClassification
+  location_address      String?
+  location_city         String?
+  location_state        String?
+  location_country      String?
+  location_zip          String?
+  jd_attachment_id      String?                 @db.Uuid
+  jd_filename           String?
+  jd_file_type          String?
+  jd_thumbnail          Bytes?
+  jd_classification     DocumentClassification?
   jd_description        String
   jd_link               String                  @db.VarChar(255)
   job_role_id           String                  @db.Uuid
@@ -1219,6 +1249,7 @@ model positions {
   recruiter_assignee_id String?
   apollo_id             String?                 @unique
   salary_range          String?
+  airtable_metadata     Json
   created_by            String?
   created_at            DateTime                @default(now())
   last_updated_by       String?
@@ -1230,7 +1261,7 @@ model positions {
   candidate_submissions candidate_submissions[]
   pocs                  pocs[]
   companies             companies               @relation(fields: [company_id, is_company_deleted, company_name, company_status], references: [id, is_deleted, name, status])
-  documents             documents               @relation(fields: [jd_attachment_id, jd_filename, jd_file_type, jd_link, jd_thumbnail, jd_classification], references: [id, filename, mime_type, url, thumbnail, classification])
+  documents             documents?              @relation(fields: [jd_attachment_id, jd_filename, jd_file_type, jd_link, jd_thumbnail, jd_classification], references: [id, filename, mime_type, url, thumbnail, classification])
   job_roles             job_roles               @relation(fields: [job_role_id], references: [id])
 
   @@unique([id, company_id, is_deleted, is_company_deleted, company_name])
@@ -1472,6 +1503,7 @@ model user_addresses {
   state           String
   city            String
   zip             String
+  address         String?
   created_by      String    @default("system")
   last_updated_by String    @default("system")
   deleted_by      String?
@@ -1570,33 +1602,42 @@ model user_groups {
 }
 
 model users {
-  id                      String                    @id @db.Uuid
-  first_name              String
-  last_name               String
-  username                String                    @unique
-  email                   String                    @unique
-  password                String
-  bio                     String?
-  phone                   String?
-  job_title               String?
-  email_verified          Boolean?                  @default(true)
-  last_login              DateTime?
-  created_by              String?
-  created_at              DateTime                  @default(now())
-  last_updated_by         String?
-  last_updated_at         DateTime?
-  deleted_at              DateTime?
-  deleted_by              String?
-  tenant_id               String                    @db.Uuid
-  interview_attendies_id  String?                   @db.Uuid
-  DocumentSharedWithUsers DocumentSharedWithUsers[]
-  comment_mentions        comment_mentions[]
-  documents               documents[]
-  folders                 folders[]
-  user_addresses          user_addresses?
-  user_devices            user_devices?
-  user_group_members      user_group_members?
-  interview_attendees     interview_attendees?      @relation(fields: [interview_attendies_id], references: [id])
+  id                           String                        @id @db.Uuid
+  first_name                   String
+  last_name                    String
+  username                     String                        @unique
+  email                        String                        @unique
+  password                     String
+  psuedo_first_name            String?
+  psuedo_last_name             String?
+  bio                          String?
+  phone                        String?
+  job_title                    String?
+  status                       String?
+  gender                       Gender?
+  personal_phone               String?
+  personal_email               String?
+  date_of_joining              DateTime?
+  email_verified               Boolean?                      @default(true)
+  last_login                   DateTime?
+  created_by                   String?
+  created_at                   DateTime                      @default(now())
+  last_updated_by              String?
+  last_updated_at              DateTime?
+  deleted_at                   DateTime?
+  deleted_by                   String?
+  tenant_id                    String                        @db.Uuid
+  airtable_metadata            Json?
+  interview_attendies_id       String?                       @db.Uuid
+  DocumentSharedWithUsers      DocumentSharedWithUsers[]
+  comment_mentions             comment_mentions[]
+  documents                    documents[]
+  folders                      folders[]
+  user_addresses               user_addresses?
+  user_devices                 user_devices?
+  user_group_members           user_group_members?
+  interview_attendees          interview_attendees?          @relation(fields: [interview_attendies_id], references: [id])
+  user_job_title_single_select user_job_title_single_select? @relation(fields: [job_title], references: [value])
 
   @@unique([id, email, first_name, last_name])
   @@unique([id, first_name, last_name])
@@ -1631,6 +1672,126 @@ model work_experiences {
   @@index([is_present])
   @@index([organization_name])
   @@index([title])
+}
+
+model field_references {
+  id              String        @id @db.Uuid
+  table_schema_id String        @db.Uuid
+  reference       String
+  table_schemas   table_schemas @relation(fields: [table_schema_id], references: [id], onDelete: Cascade)
+
+  @@index([table_schema_id])
+}
+
+model frontend_configs {
+  id                String          @id @db.Uuid
+  additional_config Json?
+  tenant_config_id  String?         @db.Uuid
+  tenant_id         String?         @unique @db.Uuid
+  policy_id         String?         @db.Uuid
+  is_deleted        Boolean         @default(false)
+  table_schemas     table_schemas[]
+}
+
+model sheet_configs {
+  id              String        @id @db.Uuid
+  layout_type     String
+  sheet_config_id String        @unique
+  display_name    String
+  description     String?
+  relation        String?
+  action          String?
+  api_endpoint    String?
+  hidden_fields   String[]
+  table_schema_id String        @db.Uuid
+  db_table_name   String
+  created_by      String?
+  created_at      DateTime      @default(now())
+  last_updated_by String?
+  last_updated_at DateTime
+  is_deleted      Boolean       @default(false)
+  deleted_at      DateTime?
+  deleted_by      String?
+  table_schemas   table_schemas @relation(fields: [table_schema_id, db_table_name], references: [id, db_table_name])
+
+  @@index([table_schema_id])
+}
+
+model table_fields {
+  id                 String        @id @db.Uuid
+  table_schema_id    String        @db.Uuid
+  field_id           String        @unique
+  field_order        Int
+  display_name       String
+  db_field_name      String
+  type               FieldType
+  db_field_type      DBFieldType
+  is_relational      Boolean       @default(false)
+  relation           Json?
+  formatting         Json?
+  validation         Json?
+  display            Json?
+  field_edit_options Json?
+  icon               String?
+  created_by         String?
+  created_at         DateTime      @default(now())
+  last_updated_by    String?
+  last_updated_at    DateTime
+  is_deleted         Boolean       @default(false)
+  deleted_at         DateTime?
+  deleted_by         String?
+  table_schemas      table_schemas @relation(fields: [table_schema_id], references: [id], onDelete: Cascade)
+
+  @@index([field_id])
+  @@index([table_schema_id])
+}
+
+model table_schemas {
+  id                 String             @id @db.Uuid
+  frontend_config_id String             @db.Uuid
+  table_id           String             @unique
+  table_name         String
+  db_table_name      String
+  endpoint_url       String?
+  table_description  String?
+  icon               String?
+  version            String?
+  hidden_fields      String[]
+  default_views      String[]
+  user_specific      String[]
+  history            String[]
+  context_options    Json?
+  created_by         String?
+  created_at         DateTime           @default(now())
+  last_updated_by    String?
+  last_updated_at    DateTime
+  is_deleted         Boolean            @default(false)
+  deleted_at         DateTime?
+  deleted_by         String?
+  field_references   field_references[]
+  sheet_configs      sheet_configs[]
+  table_fields       table_fields[]
+  frontend_configs   frontend_configs   @relation(fields: [frontend_config_id], references: [id], onDelete: Cascade)
+
+  @@unique([id, db_table_name])
+  @@index([frontend_config_id])
+}
+
+model user_job_title_single_select {
+  id                 String             @id @db.Uuid
+  field_type         FrontendFieldTypes @default(SINGLE_SELECT)
+  field_display_name String             @default("leads_status")
+  color              String?            @db.VarChar(32)
+  color_hex          String?            @db.Char(6)
+  key                String             @unique
+  value              String             @unique
+  created_by         String             @default("system")
+  created_at         DateTime           @default(now())
+  users              users[]
+
+  @@index([color])
+  @@index([field_display_name])
+  @@index([value])
 }
 
 enum AuthStrategy {
@@ -1920,4 +2081,57 @@ enum TermType {
   VERB
   ADJECTIVE
   COMPOUND
+}
+
+enum DBFieldType {
+  VARCHAR
+  TEXT
+  TIMESTAMP
+  BOOLEAN
+  INTEGER
+  DECIMAL
+  POINT
+  RELATION
+}
+
+enum DisplayType {
+  text
+  badge
+  avatar
+  link
+  tag
+  status
+  attachment
+}
+
+enum FieldType {
+  SHORT_TEXT
+  LONG_TEXT
+  DATE
+  DATETIME
+  URL
+  EMAIL
+  PHONE
+  CHECKBOX
+  NUMBER
+  PERCENT
+  CURRENCY
+  GEOLOCATION
+  USER
+  ATTACHMENT
+  FORMULA
+  MULTI_SELECT
+  SINGLE_SELECT
+  LINK_TO_ANOTHER_RECORD
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum RelationType {
+  ONE
+  MANY
 }
