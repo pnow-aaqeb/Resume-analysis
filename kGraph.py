@@ -182,14 +182,15 @@ class RecruitmentGraphBuilder:
             llm=self.llm,
             allowed_nodes=allowed_nodes,
             allowed_relationships=allowed_relationships,
+            node_properties=True,
             # node_properties=node_properties,
             # strict_mode=True,
             # relationship_properties=relationship_properties,
-            additional_instructions=additional_instructions
+            # additional_instructions=additional_instructions
         )
 
 
-    async def process_emails(self, batch_size: int = 100):
+    async def process_emails(self, batch_size: int = 500):
         """Process emails in batches using transactions to handle large volumes."""
         await self.prisma.connect()
         
@@ -698,8 +699,8 @@ class RecruitmentGraphBuilder:
                 Document(
                     page_content=chunk,
                     metadata={
-                        'chunk_id': i,
-                        'total_chunks': len(chunks),
+                        # 'chunk_id': i,
+                        # 'total_chunks': len(chunks),
                         'subject': message.subject,
                         'sender_email': message.sender_email,
                         'recipients': message.recipients,
@@ -712,7 +713,7 @@ class RecruitmentGraphBuilder:
                             'candidates': valid_data['candidates'],  # List of validated candidate names
                             'exact_matches': valid_data['exact_matches']  # Original to exact mapping
                         },
-                        'additional_instructions': additional_context
+                        # 'additional_instructions': additional_context
                     }
                 ) for i, chunk in enumerate(chunks)
             ]
@@ -745,17 +746,31 @@ class RecruitmentGraphBuilder:
         
         # Enforce parent-child hierarchy for the core recruitment flow.
         hierarchy_query = """
+        // Connect only related nodes based on specific properties
         MATCH (child)
         WHERE child:Company OR child:Position OR child:Candidate 
-           OR child:Submission OR child:Interview OR child:Placement
+        OR child:Submission OR child:Interview OR child:Placement
         WITH child
         MATCH (parent)
-        WHERE (child:Company AND parent:ResearchContact)
-           OR (child:Position AND parent:Company)
-           OR (child:Candidate AND parent:Position)
-           OR (child:Submission AND parent:Candidate)
-           OR (child:Interview AND parent:Submission)
-           OR (child:Placement AND parent:Interview)
+        WHERE 
+            // Company only connects to its specific ResearchContact
+            (child:Company AND parent:ResearchContact AND child.research_contact_id = parent.id)
+            OR 
+            // Position only connects to its specific Company
+            (child:Position AND parent:Company AND child.company_id = parent.id)
+            OR
+            // Candidate only connects to the Position they applied for
+            (child:Candidate AND parent:Position AND child.position_id = parent.id)
+            OR
+            // Submission only connects to its specific Candidate
+            (child:Submission AND parent:Candidate AND child.candidate_id = parent.id)
+            OR
+            // Interview only connects to its specific Submission
+            (child:Interview AND parent:Submission AND child.submission_id = parent.id)
+            OR
+            // Placement only connects to its specific Interview
+            (child:Placement AND parent:Interview AND child.interview_id = parent.id)
+
         MERGE (child)-[r:CHILD_OF]->(parent)
         SET r.creation_date = COALESCE(r.creation_date, datetime()),
             r.last_updated = datetime(),
@@ -765,7 +780,7 @@ class RecruitmentGraphBuilder:
         # hierarchy_query = """
         # MATCH (child)
         # WHERE child:Company OR child:Position OR child:Candidate 
-        #     OR child:Submission OR child:Interview OR child:Placement
+        #     OR child:Submission OR child:Interview OR child:Placementb
         # WITH child
         # MATCH (parent)
         # WHERE (parent:ResearchContact AND child:Company)  # Changed direction
@@ -811,8 +826,8 @@ class RecruitmentGraphBuilder:
         """
         
         self.graph.query(hierarchy_query)
-        self.graph.query(level_query)
-        self.graph.query(support_query)
+        # self.graph.query(level_query)
+        # self.graph.query(support_query)
 
 
 async def main():
